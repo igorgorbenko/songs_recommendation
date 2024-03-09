@@ -1,0 +1,7 @@
+confluent-kafka==2.3.0
+python-dotenv==1.0.1
+Flask==3.0.2
+redis==5.0.2
+pymilvus==2.3.6
+SQLAlchemy==2.0.28
+psycopg2-binary==2.9.9

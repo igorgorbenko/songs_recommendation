@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Music Recommendation System</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h2 class="mt-5">Music Recommendation System</h2>
+        <form id="recommendationForm" class="mt-4">
+            <div class="form-group">
+                <label for="userId">User ID</label>
+                <input type="text" class="form-control" id="userId" name="user_id" placeholder="Enter user ID">
+            </div>
+            <button type="submit" class="btn btn-primary">Get Recommendations</button>
+        </form>
+        <div id="recommendations" class="mt-4"></div>
+    </div>
+
+    <script>
+        $(document).ready(function() {
+            $("#recommendationForm").submit(function(event) {
+                event.preventDefault();
+                var userId = $("#userId").val();
+                $.get("/recommend?user_id=" + userId, function(data) {
+                    var recommendations = JSON.parse(data);
+                    if (Array.isArray(recommendations)) {
+                        var html = "<h4>Recommendations:</h4><table class='table'><tbody>";
+                        recommendations.forEach(function(song) {
+                            html += '<tr><td>' + song + '</td><td><button class="btn btn-success btn-sm like">Like</button></td><td><button class="btn btn-danger btn-sm dislike">Dislike</button></td></tr>';
+                        });
+                        html += "</tbody></table>";
+                        $("#recommendations").html(html);
+                    } else {
+                        console.error("Received data is not an array:", recommendations);
+                    }
+                });
+            });
+
+            // Обработчики для кнопок like и dislike
+        });
+    </script>
+</body>
+</html>
