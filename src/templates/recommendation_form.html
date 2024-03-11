@@ -5,6 +5,11 @@
     <title>Music Recommendation System</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
     <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+    <style>
+        .strike {
+            text-decoration: line-through;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -16,6 +21,7 @@
             </div>
             <button type="submit" class="btn btn-primary">Get Recommendations</button>
         </form>
+        <div id="userVector" class="mt-4"></div>
         <div id="recommendations" class="mt-4"></div>
     </div>
 
@@ -24,22 +30,64 @@
             $("#recommendationForm").submit(function(event) {
                 event.preventDefault();
                 var userId = $("#userId").val();
-                $.get("/recommend?user_id=" + userId, function(data) {
-                    var recommendations = JSON.parse(data);
+                $.get("/recommend?user_id=" + userId, function(response) {
+                    var recommendations = response.recommendations;
+                    var userVector = response.user_vector;
+
+                    if (userVector && Object.keys(userVector).length !== 0) {
+                        $("#userVector").html("<h4>User Vector:</h4><pre>" + JSON.stringify(userVector, null, 2) + "</pre>");
+                    } else {
+                        $("#userVector").html("<h4>User Vector:</h4><p>User vector is empty.</p>");
+                    }
+
                     if (Array.isArray(recommendations)) {
                         var html = "<h4>Recommendations:</h4><table class='table'><tbody>";
                         recommendations.forEach(function(song) {
-                            html += '<tr><td>' + song + '</td><td><button class="btn btn-success btn-sm like">Like</button></td><td><button class="btn btn-danger btn-sm dislike">Dislike</button></td></tr>';
+                            html += '<tr id="song-' + song.id + '"><td>' + song.id + '</td><td>' + song.name + '</td><td><button class="btn btn-success btn-sm like" data-song-id="' + song.id + '">Like</button></td><td><button class="btn btn-danger btn-sm dislike" data-song-id="' + song.id + '">Dislike</button></td></tr>';
                         });
                         html += "</tbody></table>";
                         $("#recommendations").html(html);
+
+                        $(".like").click(function() {
+                            var songId = $(this).data("song-id");
+                            $.ajax({
+                                url: "/impression",
+                                type: "POST",
+                                contentType: "application/json",
+                                data: JSON.stringify({ user_id: userId, song_id: songId, is_like: true, event_name: "impression" }),
+                                success: function(response) {
+                                    // Todo
+                                },
+                                error: function(xhr, status, error) {
+                                    // Todo
+                                }
+                            });
+                            $(this).addClass("text-muted").attr("disabled", true);
+                            $(this).closest("tr").find(".dislike").attr("disabled", true);
+                        });
+
+                        $(".dislike").click(function() {
+                            var songId = $(this).data("song-id");
+                            $.ajax({
+                                url: "/impression",
+                                type: "POST",
+                                contentType: "application/json",
+                                data: JSON.stringify({ user_id: userId, song_id: songId, is_like: false, event_name: "impression" }),
+                                success: function(response) {
+                                    // Todo
+                                },
+                                error: function(xhr, status, error) {
+                                    // Todo
+                                }
+                            });
+                            $(this).closest("tr").addClass("strike").find("button").attr("disabled", true);
+                        });
+
                     } else {
                         console.error("Received data is not an array:", recommendations);
                     }
                 });
             });
-
-            // Обработчики для кнопок like и dislike
         });
     </script>
 </body>

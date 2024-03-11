@@ -15,8 +15,8 @@ class Events(Base):
     __tablename__ = 'events'
     id = Column(Integer, primary_key=True)
     event_name = Column(String)
-    ts = Column(Integer)
-    user_id = Column(Integer)
-    recommendations = Column(ARRAY(Integer))
-    recommendations_str = Column(ARRAY(String))
-    model = Column(String)
+    # ts = Column(Integer)
+    # user_id = Column(Integer)
+    # recommendations = Column(ARRAY(Integer))
+    # recommendations_str = Column(ARRAY(String))
+    # model = Column(String)

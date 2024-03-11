@@ -7,7 +7,7 @@ def create_database():
     conn = psycopg2.connect(
         host='localhost',
         user='postgres',
-        password='example',
+        password='admin',
         dbname='postgres'
     )
     conn.autocommit = True
@@ -23,7 +23,7 @@ def create_database():
     conn.close()
 
 def init_db():
-    engine = create_engine('postgresql://postgres:example@localhost:5432/songs_recommendation')
+    engine = create_engine('postgresql://postgres:admin@localhost:5432/songs_recommendation')
     Session = sessionmaker(bind=engine)
     from postgres.models import Base
     Base.metadata.create_all(engine)

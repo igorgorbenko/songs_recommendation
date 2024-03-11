@@ -1,0 +1,25 @@
+{
+  "name": "jdbc-sink-connector",
+  "config": {
+    "connector.class": "io.confluent.connect.jdbc.JdbcSinkConnector",
+    "tasks.max": "1",
+    "topics": "events",
+    "connection.url": "jdbc:postgresql://172.19.0.2:5432/songs_recommendation",
+    "connection.user": "postgres",
+    "connection.password": "admin",
+    "auto.create": "false",
+    "auto.evolve": "true",
+    "insert.mode": "insert",
+    "pk.mode": "none",
+    "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "true",
+    "key.converter.schemas.enable": "true",
+    "delete.enabled": "false",
+    "transforms": "TimestampConverter",
+    "transforms.TimestampConverter.type": "org.apache.kafka.connect.transforms.TimestampConverter$Value",
+    "transforms.TimestampConverter.target.type": "Timestamp",
+    "transforms.TimestampConverter.field": "ts",
+    "transforms.TimestampConverter.format": "yyyy-MM-dd'T'HH:mm:ss.SSSSSS"
+  }
+}
