@@ -5,9 +5,23 @@
     <title>Music Recommendation System</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
     <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         .strike {
             text-decoration: line-through;
+        }
+        .table td {
+            vertical-align: middle;
+        }
+        .table td:first-child {
+            width: 20%;
+        }
+        .table td:nth-child(2) {
+            width: 60%;
+        }
+        .table td:last-child {
+            width: 20%;
+            text-align: center;
         }
     </style>
 </head>
@@ -21,11 +35,24 @@
             </div>
             <button type="submit" class="btn btn-primary">Get Recommendations</button>
         </form>
-        <div id="userVector" class="mt-4"></div>
         <div id="recommendations" class="mt-4"></div>
+        <div id="userVector" class="mt-4"></div>
+        <canvas id="userVectorChart"></canvas>
     </div>
 
     <script>
+        var userVectorChart;
+
+        function aggregateVector(vector, intervalSize) {
+            const aggregatedVector = [];
+            for (let i = 0; i < vector.length; i += intervalSize) {
+                const interval = vector.slice(i, i + intervalSize);
+                const average = interval.reduce((sum, value) => sum + value, 0) / interval.length;
+                aggregatedVector.push(average);
+            }
+            return aggregatedVector;
+        }
+
         $(document).ready(function() {
             $("#recommendationForm").submit(function(event) {
                 event.preventDefault();
@@ -33,59 +60,72 @@
                 $.get("/recommend?user_id=" + userId, function(response) {
                     var recommendations = response.recommendations;
                     var userVector = response.user_vector;
+                    var requestId = response.request_id;
 
-                    if (userVector && Object.keys(userVector).length !== 0) {
-                        $("#userVector").html("<h4>User Vector:</h4><pre>" + JSON.stringify(userVector, null, 2) + "</pre>");
-                    } else {
-                        $("#userVector").html("<h4>User Vector:</h4><p>User vector is empty.</p>");
+                    if (userVectorChart) {
+                        userVectorChart.destroy();
                     }
 
-                    if (Array.isArray(recommendations)) {
-                        var html = "<h4>Recommendations:</h4><table class='table'><tbody>";
-                        recommendations.forEach(function(song) {
-                            html += '<tr id="song-' + song.id + '"><td>' + song.id + '</td><td>' + song.name + '</td><td><button class="btn btn-success btn-sm like" data-song-id="' + song.id + '">Like</button></td><td><button class="btn btn-danger btn-sm dislike" data-song-id="' + song.id + '">Dislike</button></td></tr>';
+                    if (Array.isArray(userVector) && userVector.length > 0) {
+                        var aggregatedVector = aggregateVector(userVector, 10);
+
+                        var ctx = document.getElementById('userVectorChart').getContext('2d');
+                        userVectorChart = new Chart(ctx, {
+                            type: 'bar',
+                            data: {
+                                labels: aggregatedVector.map((_, index) => index + 1),
+                                datasets: [{
+                                    label: 'User Vector',
+                                    data: aggregatedVector,
+                                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                                    borderColor: 'rgba(75, 192, 192, 1)',
+                                    borderWidth: 1
+                                }]
+                            },
+                            options: {
+                                scales: {
+                                    y: {
+                                        beginAtZero: true
+                                    }
+                                }
+                            }
                         });
+                        $("#userVector").html("<h4>User Vector:</h4>");
+                    } else {
+                        $("#userVector").html("<h4>User Vector:</h4><p>User vector is empty or invalid.</p>");
+                    }
+
+                    // Отображение рекомендаций...
+                    var html = "<h4>Recommendations:</h4>";
+                    for (var model in recommendations) {
+                        var modelRecommendations = recommendations[model];
+                        html += "<h5>Model: " + model + "</h5><table class='table'><tbody>";
+                        for (var i = 0; i < modelRecommendations.song_ids.length; i++) {
+                            html += '<tr><td>' + modelRecommendations.artists[i] + '</td><td>' + modelRecommendations.songs[i] + '</td><td><button class="btn btn-success btn-sm like" data-song-id="' + modelRecommendations.song_ids[i] + '" data-artist="' + modelRecommendations.artists[i] + '">Like</button> <button class="btn btn-danger btn-sm dislike" data-song-id="' + modelRecommendations.song_ids[i] + '" data-artist="' + modelRecommendations.artists[i] + '">Dislike</button></td></tr>';
+                        }
                         html += "</tbody></table>";
-                        $("#recommendations").html(html);
-
-                        $(".like").click(function() {
-                            var songId = $(this).data("song-id");
-                            $.ajax({
-                                url: "/impression",
-                                type: "POST",
-                                contentType: "application/json",
-                                data: JSON.stringify({ user_id: userId, song_id: songId, is_like: true, event_name: "impression" }),
-                                success: function(response) {
-                                    // Todo
-                                },
-                                error: function(xhr, status, error) {
-                                    // Todo
-                                }
-                            });
-                            $(this).addClass("text-muted").attr("disabled", true);
-                            $(this).closest("tr").find(".dislike").attr("disabled", true);
-                        });
-
-                        $(".dislike").click(function() {
-                            var songId = $(this).data("song-id");
-                            $.ajax({
-                                url: "/impression",
-                                type: "POST",
-                                contentType: "application/json",
-                                data: JSON.stringify({ user_id: userId, song_id: songId, is_like: false, event_name: "impression" }),
-                                success: function(response) {
-                                    // Todo
-                                },
-                                error: function(xhr, status, error) {
-                                    // Todo
-                                }
-                            });
-                            $(this).closest("tr").addClass("strike").find("button").attr("disabled", true);
-                        });
-
-                    } else {
-                        console.error("Received data is not an array:", recommendations);
                     }
+                    $("#recommendations").html(html);
+
+                    $(".like, .dislike").click(function() {
+                        var songId = $(this).data("song-id");
+                        var artist = $(this).data("artist");
+                        var isLike = $(this).hasClass("like");
+                        $.ajax({
+                            url: "/impression",
+                            type: "POST",
+                            contentType: "application/json",
+                            data: JSON.stringify({ request_id: requestId, user_id: userId,
+                                song_id: songId, artist: artist, is_like: isLike }),
+                            success: function(response) {
+                                // Обработка успешного запроса
+                            },
+                            error: function(xhr, status, error) {
+                                // Обработка ошибки запроса
+                            }
+                        });
+                        $(this).closest("tr").find("button").attr("disabled", true);
+                    });
                 });
             });
         });

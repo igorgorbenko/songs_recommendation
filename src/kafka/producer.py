@@ -1,6 +1,10 @@
+import logging
 import json
-from datetime import datetime
 from confluent_kafka import Producer
+
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 
 class KafkaEventProducer:
@@ -11,9 +15,9 @@ class KafkaEventProducer:
     @staticmethod
     def acked(err, msg):
         if err is not None:
-            print(f"Failed to deliver message: {err}")
+            logger.error(f"Failed to deliver message: {err}")
         else:
-            print(f"Message delivered to {msg.topic()} [{msg.partition()}]")
+            logger.info(f"Message delivered to {msg.topic()} [{msg.partition()}]")
 
     def produce_event(self, event):
         event_data = json.dumps(event).encode('utf-8')
@@ -22,20 +26,3 @@ class KafkaEventProducer:
 
     def flush(self):
         self.producer.flush()
-
-# if __name__ == '__main__':
-#     producer = KafkaEventProducer(bootstrap_servers=BOOTSTRAP_SERVERS, topic=EVENTS_TOPIC_NAME)
-#     impression_event = {
-#         'event_type': 'impression',
-#         'user_id': 1,
-#         'song_id': 101,
-#         'reaction': 'like'
-#     }
-#     producer.produce_event(impression_event)
-#
-#     recommend_event = {
-#         'event_type': 'recommend',
-#         'user_id': 1,
-#         'recommended_songs': [201, 202, 203]
-#     }
-#     producer.produce_event(recommend_event)

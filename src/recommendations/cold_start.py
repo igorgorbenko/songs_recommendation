@@ -1,4 +1,4 @@
-# should be clustered in beckground
+# should be clustered in background
 COLD_START_SONGS = [
     448245379610980588,
     448245379610981873,

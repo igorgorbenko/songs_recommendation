@@ -4,7 +4,7 @@
     "connector.class": "io.confluent.connect.jdbc.JdbcSinkConnector",
     "tasks.max": "1",
     "topics": "events",
-    "connection.url": "jdbc:postgresql://172.19.0.2:5432/songs_recommendation",
+    "connection.url": "jdbc:postgresql://172.18.0.2:5432/songs_recommendation",
     "connection.user": "postgres",
     "connection.password": "admin",
     "auto.create": "false",
@@ -16,6 +16,7 @@
     "value.converter.schemas.enable": "true",
     "key.converter.schemas.enable": "true",
     "delete.enabled": "false",
+
     "transforms": "TimestampConverter",
     "transforms.TimestampConverter.type": "org.apache.kafka.connect.transforms.TimestampConverter$Value",
     "transforms.TimestampConverter.target.type": "Timestamp",
