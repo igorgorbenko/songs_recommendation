@@ -1,6 +1,4 @@
 from flask import Flask, request, render_template, jsonify
-
-# from postgres.database import init_db
 from recommendations.recommender import Recommender
 
 app = Flask(__name__)
