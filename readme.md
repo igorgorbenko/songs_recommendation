@@ -24,7 +24,8 @@ This project is a music recommendation system that suggests songs to users based
 4. Set up your Milvis (Zilliz cloud) credentials and other necessary environment variables in a `.env` file.
 An example of the .env file see below:
 
-```KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+```
+KAFKA_BOOTSTRAP_SERVERS=kafka:9092
 KAFKA_EVENTS_TOPIC_NAME=events
 KAFKA_CONSUMER_GROUP_NAME=events_consumer
 
