@@ -2,8 +2,6 @@ from flask import Flask, request, render_template, jsonify
 from recommendations.recommender import Recommender
 
 app = Flask(__name__)
-
-# init_db()
 RECOMMENDER = Recommender()
 
 
