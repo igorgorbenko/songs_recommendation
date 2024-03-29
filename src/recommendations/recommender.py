@@ -64,13 +64,6 @@ class Recommender:
             return {'code': 500, 'message': str(e)}
         return {'code': 200}
 
-    @staticmethod
-    def format_vector(vector, precision=2):
-        if vector is not None:
-            return [round(float(x), precision) for x in vector]
-        else:
-            return None
-
     def get_recommendations(self, user_id):
         request_id = str(uuid.uuid4())
         logger.info("The process has started")
@@ -125,6 +118,13 @@ class Recommender:
         formatted_vector = self.format_vector(user_vector) if user_vector is not None else 'None'
         self.publish_recommendation_info(request_id, user_id, recommendations)
         return request_id, recommendations, formatted_vector
+
+    @staticmethod
+    def format_vector(vector, precision=2):
+        if vector is not None:
+            return [round(float(x), precision) for x in vector]
+        else:
+            return None
 
     @staticmethod
     def get_songs_description(song_ids):
@@ -190,9 +190,6 @@ class Recommender:
             songs.append(hit.entity.get('song'))
 
         return song_ids, artists, songs
-
-    def filter_seen_songs(self, user_id, songs):
-        pass
 
     def publish_recommendation_info(self, request_id, user_id, recommendations):
         event = {
