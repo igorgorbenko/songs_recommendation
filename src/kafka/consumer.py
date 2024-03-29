@@ -6,6 +6,7 @@ import numpy as np
 from confluent_kafka import Consumer, KafkaError
 from dotenv import load_dotenv
 from pymilvus import Collection, connections
+from redis import Redis
 
 from src.utils.utils import Utils
 
@@ -27,6 +28,8 @@ USERS_COLLECTION = Collection(USERS_COLLECTION_NAME)
 SONGS_COLLECTION = Collection(SONGS_COLLECTION_NAME)
 ARTISTS_COLLECTION = Collection(ARTISTS_COLLECTION_NAME)
 USERS_ARTISTS_COLLECTION = Collection(USERS_ARTISTS_COLLECTION_NAME)
+
+REDIS_CLIENT = Redis(host='localhost', port=6379, db=0)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -58,6 +61,9 @@ class KafkaEventConsumer:
 
             user_artist_vector = Utils.get_vector(USERS_ARTISTS_COLLECTION, f"user_id == {user_id}")
             self.update_vector(USERS_ARTISTS_COLLECTION, user_id, user_artist_vector, artist_vector, "user-artist")
+
+        REDIS_CLIENT.sadd(f"user:{user_id}:seen_songs", song_id)
+        logger.info(f"The song {song_id} for User {user_id} has been saved to Redis")
 
     def update_vector(self, collection, user_id, existing_vector, new_vector, vector_type):
         if new_vector is not None:

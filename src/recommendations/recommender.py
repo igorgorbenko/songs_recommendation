@@ -1,12 +1,13 @@
 import json
 import logging
 import os
-from random import sample
+from random import sample, shuffle
 from datetime import datetime, timezone
 import uuid
 
 from pymilvus import Collection, connections
 from dotenv import load_dotenv
+from redis import Redis
 
 from src.kafka.producer import KafkaEventProducer
 from src.utils.utils import Utils
@@ -34,6 +35,8 @@ SONGS_COLLECTION = Collection(MILVUS_SONGS_COLLECTION)
 ARTISTS_COLLECTION = Collection(MILVUS_ARTISTS_COLLECTION)
 USERS_ARTISTS_COLLECTION = Collection(MILVUS_USERS_ARTISTS_COLLECTION)
 
+REDIS_CLIENT = Redis(host='localhost', port=6379, db=0)
+
 
 class Recommender:
     def __init__(self):
@@ -41,30 +44,24 @@ class Recommender:
         logger.info("Recommender initialized")
 
     def put_impression(self, request_id, user_id, song_id, artist, is_like):
-        # Record the impression in Redis
         try:
-            # REDIS_CLIENT.sadd(f"user:{user_id}:seen_songs", song_id)
-            logger.info(f"The song {song_id} for User {user_id} has been saved to Redis")
-
             # Send the impression event to Kafka
-            if is_like:
-                event = {
-                    'event_name': 'impression',
-                    'request_id': request_id,
-                    'is_like': True,
-                    'ts': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f%z'),
-                    'user_id': int(user_id),
-                    'song_id': int(song_id),
-                    'artist': artist
-                }
-                # message = self.generate_impression_schema(event)
-                self.kafka_producer.produce_event(event)
-                logger.info(f"Published impression event for user {user_id} and "
-                            f"song {song_id} by artist {artist} (like == {is_like})")
+            event = {
+                'event_name': 'impression',
+                'request_id': request_id,
+                'is_like': is_like,
+                'ts': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f%z'),
+                'user_id': int(user_id),
+                'song_id': int(song_id),
+                'artist': artist
+            }
+            # message = self.generate_impression_schema(event)
+            self.kafka_producer.produce_event(event)
+            logger.info(f"Published impression event for user {user_id} and "
+                        f"song {song_id} by artist {artist} (like == {is_like})")
         except Exception as e:
             logger.error(e)
-            return {'code': 500}
-
+            return {'code': 500, 'message': str(e)}
         return {'code': 200}
 
     @staticmethod
@@ -76,30 +73,40 @@ class Recommender:
 
     def get_recommendations(self, user_id):
         request_id = str(uuid.uuid4())
-        logger.info(f'The process has being started')
+        logger.info("The process has started")
         user_vector = Utils.get_vector(USERS_COLLECTION, f"user_id == {user_id}")
-        logger.info(f'The query for User_vector retrieving has been done')
         user_artist_vector = Utils.get_vector(USERS_ARTISTS_COLLECTION, f"user_id == {user_id}")
-        logger.info(f'The query for user_artist_vector retrieving has been done')
         recommendations = {}
 
+        seen_songs = {int(song_id.decode('utf-8')) for song_id in REDIS_CLIENT.smembers(f"user:{user_id}:seen_songs")}
+
         if user_vector:
-            logger.info(f'User {user_id} has the user_vector')
+            logger.info(f"User {user_id} has a user_vector")
             song_ids, artists, songs = self.find_songs(user_vector, limit=100)
-            logger.info(f'Songs retrieved based on the user vector of User: {user_id}')
-            selected_songs = sample(list(zip(song_ids, artists, songs)), 2)
-            recommendations['online_user'] = {'song_ids': [song[0] for song in selected_songs],
-                                              'artists': [song[1] for song in selected_songs],
-                                              'songs': [song[2] for song in selected_songs]}
+            filtered_songs = [(song_id, artist, song) for song_id, artist, song in zip(song_ids, artists, songs) if
+                              song_id not in seen_songs]
+            shuffle(filtered_songs)
+            selected_songs = filtered_songs[:min(2, len(filtered_songs))]
+
+            recommendations['online_user'] = {
+                'song_ids': [song[0] for song in selected_songs],
+                'artists': [song[1] for song in selected_songs],
+                'songs': [song[2] for song in selected_songs]
+            }
 
             if user_artist_vector:
                 artist_names = self.find_artists(user_artist_vector, limit=20)
-                song_ids, artists, songs = self.get_songs_by_artists(artist_names)
-                logger.info(f'Songs retrieved based on the user-artist vector of User: {user_id}')
-                selected_songs = sample(list(zip(song_ids, artists, songs)), 3)
-                recommendations['online_user_artists'] = {'song_ids': [song[0] for song in selected_songs],
-                                                          'artists': [song[1] for song in selected_songs],
-                                                          'songs': [song[2] for song in selected_songs]}
+                song_ids, artists, songs = self.get_songs_by_artists(artist_names, seen_songs=seen_songs)
+
+                all_songs = list(zip(song_ids, artists, songs))
+                shuffle(all_songs)
+                selected_songs = all_songs[:min(3, len(all_songs))]
+
+                recommendations['online_user_artists'] = {
+                    'song_ids': [song[0] for song in selected_songs],
+                    'artists': [song[1] for song in selected_songs],
+                    'songs': [song[2] for song in selected_songs]
+                }
 
             cold_start_song = sample(COLD_START_SONGS, 1)
             cold_start_song_ids, cold_start_artists, cold_start_songs = Recommender.get_songs_description(cold_start_song)
@@ -110,8 +117,7 @@ class Recommender:
 
         else:
             recommended_songs = sample(COLD_START_SONGS, 5)
-            song_ids, artists, songs = Recommender.get_songs_description(recommended_songs)
-            logger.info(f'Cold Start songs retrieved for User: {user_id}')
+            song_ids, artists, songs = self.get_songs_description(recommended_songs)
             recommendations['coldstart'] = {'song_ids': song_ids,
                                             'artists': artists,
                                             'songs': songs}
@@ -138,31 +144,19 @@ class Recommender:
         return song_ids, artists, songs
 
     @staticmethod
-    def get_songs_by_artists(artists, limit_per_artist=2):
+    def get_songs_by_artists(artists, seen_songs=set(), limit_per_artist=120):
         artists_str = ', '.join(f'"{artist}"' for artist in artists)
+        seen_songs_str = ', '.join(str(song_id) for song_id in seen_songs)
+        expr = f"id not in [{seen_songs_str}] and artist in [{artists_str}]"
 
-        entities = SONGS_COLLECTION.query(
-            expr=f'artist in [{artists_str}]',
-            output_fields=["id", "artist", "song"],
-            limit=1000
-        )
+        entities = SONGS_COLLECTION.query(expr=expr, output_fields=["id", "artist", "song"],
+                                          limit=len(artists) * limit_per_artist)
 
-        songs_by_artist = {}
+        song_ids, artists_list, songs = [], [], []
         for entity in entities:
-            artist = entity['artist']
-            if artist not in songs_by_artist:
-                songs_by_artist[artist] = []
-            if len(songs_by_artist[artist]) < limit_per_artist:
-                songs_by_artist[artist].append((entity['id'], entity['song']))
-
-        song_ids = []
-        artists_list = []
-        songs = []
-        for artist, song_list in songs_by_artist.items():
-            for song_id, song_name in song_list:
-                song_ids.append(song_id)
-                artists_list.append(artist)
-                songs.append(song_name)
+            song_ids.append(entity['id'])
+            artists_list.append(entity['artist'])
+            songs.append(entity['song'])
 
         return song_ids, artists_list, songs
 
